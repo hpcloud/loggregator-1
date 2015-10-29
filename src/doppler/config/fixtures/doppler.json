@@ -21,6 +21,6 @@
     "TLSListenerConfig": {
         "Port": 8766,
         "KeyFile": "./fixtures/key.key",
-        "CrtFile": "./fixtures/key.crt"
+        "CertFile": "./fixtures/key.crt"
     }
 }
