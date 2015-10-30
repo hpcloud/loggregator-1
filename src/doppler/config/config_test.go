@@ -43,8 +43,9 @@ var _ = Describe("Config", func() {
 			Expect(cfg.EnableTLSTransport).To(BeTrue())
 			Expect(cfg.TLSListenerConfig).To(Equal(config.TLSListenerConfig{
 				Port:     8766,
-				CertFile: "./fixtures/key.crt",
-				KeyFile:  "./fixtures/key.key",
+				CertFile: "./fixtures/server.crt",
+				KeyFile:  "./fixtures/server.key",
+				CAFile:   "./fixtures/loggregator-ca.crt",
 			}))
 		})
 
@@ -54,7 +55,6 @@ var _ = Describe("Config", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("invalid TLS listener configuration"))
 		})
-
 	})
 
 	Context("with full config", func() {
