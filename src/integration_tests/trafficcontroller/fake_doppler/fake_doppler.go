@@ -22,9 +22,17 @@ type FakeDoppler struct {
 	sync.RWMutex
 }
 
+func New() *FakeDoppler{
+	return &FakeDoppler{
+		ApiEndpoint:":1235",
+		Ready: make(chan struct{}),
+		TrafficControllerConnected: make(chan *http.Request, 1),
+		sendMessageChan: make(chan []byte, 100),
+	}
+}
+
 func (fakeDoppler *FakeDoppler) Start() {
 	fakeDoppler.Lock()
-	defer fakeDoppler.Unlock()
 
 	connectionListener, e := net.Listen("tcp", fakeDoppler.ApiEndpoint)
 	if e != nil {
@@ -32,25 +40,17 @@ func (fakeDoppler *FakeDoppler) Start() {
 	}
 
 	fakeDoppler.connectionListener = connectionListener
-	fakeDoppler.ResetMessageChan()
-	fakeDoppler.Ready = make(chan struct{})
-	fakeDoppler.TrafficControllerConnected = make(chan *http.Request, 1)
+	fakeDoppler.Unlock()
 
-	go func() {
-		s := &http.Server{Addr: fakeDoppler.ApiEndpoint, Handler: fakeDoppler}
-		fakeDoppler.Ready <- struct{}{}
-		s.Serve(fakeDoppler.connectionListener)
-	}()
+	s := &http.Server{Addr: fakeDoppler.ApiEndpoint, Handler: fakeDoppler}
+	fakeDoppler.Ready <- struct{}{}
+	s.Serve(fakeDoppler.connectionListener)
 }
 
 func (fakeDoppler *FakeDoppler) Stop() {
 	fakeDoppler.Lock()
 	defer fakeDoppler.Unlock()
 	fakeDoppler.connectionListener.Close()
-}
-
-func (fakeDoppler *FakeDoppler) ResetMessageChan() {
-	fakeDoppler.sendMessageChan = make(chan []byte, 100)
 }
 
 func (fakeDoppler *FakeDoppler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
