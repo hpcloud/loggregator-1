@@ -32,12 +32,13 @@ func TestIntegrationTest(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	fakeDoppler = fake_doppler.New()
 	killEtcdCmd := exec.Command("pkill", "etcd")
 	killEtcdCmd.Run()
-
+	err := fakeDoppler.Start()
+	Expect(err).NotTo(HaveOccurred())
 	setupEtcdAdapter()
 	setupDopplerInEtcd()
-	setupFakeDoppler()
 	setupFakeAuthServer()
 	setupFakeUaaServer()
 
@@ -58,13 +59,6 @@ var _ = BeforeSuite(func() {
 
 	localIPAddress, _ = localip.LocalIP()
 
-	// wait for fake doppler to be up
-	Eventually(func() error {
-		_, err := http.Get("http://" + localIPAddress + ":1235")
-		return err
-	}).ShouldNot(HaveOccurred())
-	Eventually(fakeDoppler.TrafficControllerConnected).Should(Receive())
-
 	// wait for TC
 	trafficControllerDropsondeEndpoint := fmt.Sprintf("http://%s:%d", localIPAddress, 4566)
 	Eventually(func() error {
@@ -79,10 +73,8 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	trafficControllerSession.Kill().Wait()
 	gnatsdSession.Kill().Wait()
-
 	gexec.CleanupBuildArtifacts()
 	etcdRunner.Stop()
-
 	fakeDoppler.Stop()
 })
 
@@ -98,12 +90,6 @@ var (
 const APP_ID = "1234"
 const AUTH_TOKEN = "bearer iAmAnAdmin"
 const SUBSCRIPTION_ID = "firehose-subscription-1"
-
-var setupFakeDoppler = func() {
-	fakeDoppler = &fake_doppler.FakeDoppler{ApiEndpoint: ":1235"}
-	fakeDoppler.Start()
-	<-fakeDoppler.Ready
-}
 
 func setupEtcdAdapter() {
 	etcdPort = 4001

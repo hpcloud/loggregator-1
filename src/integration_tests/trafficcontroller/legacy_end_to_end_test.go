@@ -27,6 +27,8 @@ var _ = Describe("TrafficController for legacy messages", func() {
 			_, err := http.Get(fmt.Sprintf("http://%s:%d", localIPAddress, TRAFFIC_CONTROLLER_LEGACY_PORT))
 			return err
 		}).ShouldNot(HaveOccurred())
+
+		fakeDoppler.ResetMessageChan()
 	})
 
 	Context("Streaming", func() {
@@ -34,9 +36,9 @@ var _ = Describe("TrafficController for legacy messages", func() {
 			legacy_consumer := loggregator_consumer.New(legacyEndpoint, &tls.Config{}, nil)
 			messages, err := legacy_consumer.Tail(APP_ID, AUTH_TOKEN)
 			Expect(err).NotTo(HaveOccurred())
-
 			var request *http.Request
 			Eventually(fakeDoppler.TrafficControllerConnected, 10).Should(Receive(&request))
+
 			Expect(request.URL.Path).To(Equal("/apps/1234/stream"))
 
 			currentTime := time.Now().UnixNano()
@@ -55,35 +57,35 @@ var _ = Describe("TrafficController for legacy messages", func() {
 	})
 
 	Context("Recent", func() {
-		var expectedMessages [][]byte
-
-		BeforeEach(func() {
-			expectedMessages = make([][]byte, 5)
+		It("returns a multi-part HTTP response with all recent messages", func() {
+			expectedMessages := make([][]byte, 5)
 
 			for i := 0; i < 5; i++ {
 				message := makeDropsondeMessage(strconv.Itoa(i), "1234", 1234)
 				expectedMessages[i] = message
 				fakeDoppler.SendLogMessage(message)
 			}
-		})
 
-		FIt("returns a multi-part HTTP response with all recent messages", func() {
 			fakeDoppler.CloseLogMessageStream()
-			Eventually(func() bool{
+			Eventually(func() bool {
 				client := loggregator_consumer.New(legacyEndpoint, &tls.Config{}, nil)
 
-				messages, err := client.Recent("1234", "bearer iAmAnAdmin")
-
-				var request *http.Request
-				Eventually(fakeDoppler.TrafficControllerConnected, 15).Should(Receive(&request))
-				Expect(request.URL.Path).To(Equal("/apps/1234/recentlogs"))
-
+				messages, err := client.Recent(APP_ID, AUTH_TOKEN)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(message).To(HaveLen(5))
-				for i, message := range messages {
-					Expect(message.GetMessage()).To(BeEquivalentTo(strconv.Itoa(i)))
+
+				select {
+				case request := <-fakeDoppler.TrafficControllerConnected:
+					Expect(request.URL.Path).To(Equal("/apps/1234/recentlogs"))
+
+					Expect(messages).To(HaveLen(5))
+					for i, message := range messages {
+						Expect(message.GetMessage()).To(BeEquivalentTo(strconv.Itoa(i)))
+					}
+					return true
+				default:
+					return false
 				}
-			}).Should(BeTrue())
+			}, 5).Should(BeTrue())
 		})
 
 		It("correctly handles when clients go away mid-stream", func() {
@@ -146,4 +148,5 @@ var _ = Describe("TrafficController for legacy messages", func() {
 			Expect(cookie.Secure).To(BeTrue())
 		})
 	})
+
 })
