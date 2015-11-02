@@ -13,6 +13,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"integration_tests/trafficcontroller/fake_doppler"
 )
 
 var legacyEndpoint string
@@ -21,6 +22,8 @@ const TRAFFIC_CONTROLLER_LEGACY_PORT = 4567
 
 var _ = Describe("TrafficController for legacy messages", func() {
 	BeforeEach(func() {
+		fakeDoppler = fake_doppler.New()
+		go fakeDoppler.Start()
 		legacyEndpoint = fmt.Sprintf("ws://%s:%d", localIPAddress, TRAFFIC_CONTROLLER_LEGACY_PORT)
 
 		Eventually(func() error {
@@ -28,7 +31,10 @@ var _ = Describe("TrafficController for legacy messages", func() {
 			return err
 		}).ShouldNot(HaveOccurred())
 
-		fakeDoppler.ResetMessageChan()
+	})
+
+	AfterEach(func() {
+		fakeDoppler.Stop()
 	})
 
 	Context("Streaming", func() {
@@ -58,9 +64,10 @@ var _ = Describe("TrafficController for legacy messages", func() {
 
 	Context("Recent", func() {
 		It("returns a multi-part HTTP response with all recent messages", func() {
-			expectedMessages := make([][]byte, 5)
+			const messageLength = 5
+			expectedMessages := make([][]byte, messageLength)
 
-			for i := 0; i < 5; i++ {
+			for i := 0; i < messageLength; i++ {
 				message := makeDropsondeMessage(strconv.Itoa(i), "1234", 1234)
 				expectedMessages[i] = message
 				fakeDoppler.SendLogMessage(message)
@@ -77,7 +84,7 @@ var _ = Describe("TrafficController for legacy messages", func() {
 				case request := <-fakeDoppler.TrafficControllerConnected:
 					Expect(request.URL.Path).To(Equal("/apps/1234/recentlogs"))
 
-					Expect(messages).To(HaveLen(5))
+					Expect(messages).To(HaveLen(messageLength))
 					for i, message := range messages {
 						Expect(message.GetMessage()).To(BeEquivalentTo(strconv.Itoa(i)))
 					}

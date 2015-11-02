@@ -32,11 +32,8 @@ func TestIntegrationTest(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	fakeDoppler = fake_doppler.New()
 	killEtcdCmd := exec.Command("pkill", "etcd")
 	killEtcdCmd.Run()
-	err := fakeDoppler.Start()
-	Expect(err).NotTo(HaveOccurred())
 	setupEtcdAdapter()
 	setupDopplerInEtcd()
 	setupFakeAuthServer()
@@ -75,7 +72,6 @@ var _ = AfterSuite(func() {
 	gnatsdSession.Kill().Wait()
 	gexec.CleanupBuildArtifacts()
 	etcdRunner.Stop()
-	fakeDoppler.Stop()
 })
 
 var (

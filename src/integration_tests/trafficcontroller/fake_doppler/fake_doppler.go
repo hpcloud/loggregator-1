@@ -18,6 +18,7 @@ type FakeDoppler struct {
 	sendMessageChan            chan []byte
 	TrafficControllerConnected chan *http.Request
 	connectionPresent          bool
+	done chan struct{}
 	sync.RWMutex
 }
 
@@ -26,17 +27,22 @@ func New() *FakeDoppler {
 		ApiEndpoint:                "127.0.0.1:1235",
 		TrafficControllerConnected: make(chan *http.Request, 1),
 		sendMessageChan:            make(chan []byte, 100),
+		done: make(chan struct{}),
 	}
 }
 
 func (fakeDoppler *FakeDoppler) Start() error {
 	var err error
+	fakeDoppler.Lock()
 	fakeDoppler.connectionListener, err = net.Listen("tcp", fakeDoppler.ApiEndpoint)
+	fakeDoppler.Unlock()
+	if err != nil {
+		return err
+	}
 	s := &http.Server{Addr: fakeDoppler.ApiEndpoint, Handler: fakeDoppler}
 
-	go func() {
-		err = s.Serve(fakeDoppler.connectionListener)
-	}()
+	err = s.Serve(fakeDoppler.connectionListener)
+	close(fakeDoppler.done)
 	return err
 }
 
@@ -58,11 +64,12 @@ func (fakeDoppler *FakeDoppler) ServeHTTP(writer http.ResponseWriter, request *h
 }
 
 func (fakeDoppler *FakeDoppler) Stop() {
-	fakeDoppler.connectionListener.Close()
-}
-
-func (fakeDoppler *FakeDoppler) ResetMessageChan() {
-	fakeDoppler.sendMessageChan = make(chan []byte, 100)
+	fakeDoppler.Lock()
+	if fakeDoppler.connectionListener != nil {
+		fakeDoppler.connectionListener.Close()
+	}
+	fakeDoppler.Unlock()
+	<- fakeDoppler.done
 }
 
 func (fakeDoppler *FakeDoppler) ConnectionPresent() bool {
