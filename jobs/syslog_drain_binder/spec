@@ -36,12 +36,12 @@ properties:
   syslog_drain_binder.debug:
     description: boolean value to turn on verbose logging for syslog_drain_binder
     default: false
+  syslog_drain_binder.skip_cert_verify:
+    description: "when connecting over https, ignore bad ssl certificates"
+    default: false
 
   cc.bulk_api_password:
     description: "password for the bulk api"
   cc.srv_api_uri:
     description: "API URI of cloud controller"
 
-  ssl.skip_cert_verify:
-    description: "when connecting over https, ignore bad ssl certificates"
-    default: false
