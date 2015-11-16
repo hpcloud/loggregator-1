@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
 	gorilla "github.com/gorilla/websocket"
+	"truncatingbuffer"
 )
 
 const FIREHOSE_APP_ID = "firehose"
@@ -50,15 +51,17 @@ func (sink *WebsocketSink) ShouldReceiveErrors() bool {
 }
 
 func (sink *WebsocketSink) Run(inputChan <-chan *events.Envelope) {
+	stopChan := make(chan struct{})
 	sink.logger.Debugf("Websocket Sink %s: Running for streamId [%s]", sink.clientAddress, sink.streamId)
-
-	buffer := sinks.RunTruncatingBuffer(inputChan, nil, sink.messageDrainBufferSize, sink.logger, sink.dropsondeOrigin, sink.Identifier(), nil)
+	context := truncatingbuffer.NewDefaultContext(sink.dropsondeOrigin, sink.Identifier())
+	buffer := sinks.RunTruncatingBuffer(inputChan, sink.messageDrainBufferSize, context, sink.logger, stopChan)
 	for {
 		sink.logger.Debugf("Websocket Sink %s: Waiting for activity", sink.clientAddress)
 		messageEnvelope, ok := <-buffer.GetOutputChannel()
 
 		if !ok {
 			sink.logger.Debugf("Websocket Sink %s: Closed listener channel detected. Closing websocket", sink.clientAddress)
+			close(stopChan)
 			return
 		}
 
@@ -73,6 +76,7 @@ func (sink *WebsocketSink) Run(inputChan <-chan *events.Envelope) {
 		err = sink.ws.WriteMessage(gorilla.BinaryMessage, messageBytes)
 		if err != nil {
 			sink.logger.Debugf("Websocket Sink %s: Error when trying to send data to sink %s. Requesting close. Err: %v", sink.clientAddress, err)
+			close(stopChan)
 			return
 		}
 
