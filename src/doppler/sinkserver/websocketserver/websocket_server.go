@@ -100,6 +100,10 @@ func (w *WebsocketServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 }
 
 func (w *WebsocketServer) firehoseHandler(paths []string, writer http.ResponseWriter, request *http.Request) (wsHandler, error) {
+	if len(paths) != 3 {
+		http.Error(writer, "missing subscription id in firehose request: "+request.URL.Path, 400)
+		return nil, fmt.Errorf("missing subscription id in firehose request: (returning 400) %s", request.URL.Path)
+	}
 	firehoseSubscriptionId := paths[2]
 	f := func(ws *gorilla.Conn) {
 		w.streamFirehose(firehoseSubscriptionId, ws)
